@@ -1,4 +1,4 @@
-package schema
+package ecsgen
 
 import (
 	"strings"
@@ -11,9 +11,10 @@ import (
 // identifiers for strings used.
 type Initialisms []string
 
-var acronyms = []string{
+// DefaultInitialisms are the default initialisms we set. You can set more via init functions
+// by calling the AddIdentifierInitialism function.
+var DefaultInitialisms = Initialisms{
 	"AMI",
-	"OSQuery",
 	"PPID",
 	"PID",
 	"PGID",
@@ -42,7 +43,7 @@ var acronyms = []string{
 }
 
 func init() {
-	swag.AddInitialisms(acronyms...)
+	swag.AddInitialisms([]string(DefaultInitialisms)...)
 }
 
 // AddIdentifierInitialism is used to add custom initializations into the library.

@@ -12,8 +12,8 @@ import (
 
 var (
 	// globals
-	debug  = false
-	logger genolog.Logger
+	debugLog = false
+	logger   genolog.Logger
 )
 
 func main() {
@@ -38,11 +38,11 @@ func main() {
 			Usage:       "Enables more verbose, debug logging.",
 			EnvVars:     []string{"ECSGEN_DEBUG"},
 			Value:       false,
-			Destination: &debug,
+			Destination: &debugLog,
 		},
 	}
 	app.Before = func(c *cli.Context) error {
-		if debug {
+		if debugLog {
 			logger.LogrusLogger().SetLevel(logrus.DebugLevel)
 		}
 
