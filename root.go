@@ -1,6 +1,10 @@
 package ecsgen
 
-import "strings"
+import (
+	"errors"
+	"sort"
+	"strings"
+)
 
 // Root defines the top level namespace within an ECS schema. It is the top level
 // data structure used to create the schema tree.
@@ -25,6 +29,10 @@ func NewRoot() *Root {
 // For example, if you passed "client.as.organization.name", it would perform the
 // following lookups: Node("client").Child("as").Child("organization").Child("name").
 func (r *Root) Branch(branchpath string) *Node {
+	if branchpath == "" {
+		panic(errors.New("cannot have an empty branch path"))
+	}
+
 	// short circuit if the provided path is a top level object
 	if !strings.Contains(branchpath, ".") {
 		if node, found := r.TopLevel[branchpath]; found {
@@ -64,5 +72,32 @@ func (r *Root) Branch(branchpath string) *Node {
 	}
 
 	return node
+}
 
+// ListChildren implements the Walkable interface.
+func (r *Root) ListChildren() <-chan *Node {
+	// create the return channel, close it once we're done
+	ret := make(chan *Node, len(r.TopLevel))
+	defer close(ret)
+
+	// short circuit if we've got no elements
+	if len(r.TopLevel) == 0 {
+		return ret
+	}
+
+	// get a list of child names from the map
+	// and sort them
+	keys := []string{}
+	for k := range r.TopLevel {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	// populate the channel in a predictable order
+	for _, k := range keys {
+		ret <- r.TopLevel[k]
+	}
+
+	return ret
 }

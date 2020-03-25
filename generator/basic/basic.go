@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
@@ -103,12 +104,20 @@ func (b *basic) Validate() error {
 	return nil
 }
 
-// GoType returns the Go type to be used in the type definition.
-func GoType(n *ecsgen.Node) string {
+// GoFieldType returns the Go type to be used in the Go struct field type definition.
+func GoFieldType(n *ecsgen.Node) string {
+	// create a buffer to determine type
+	typeBuf := new(bytes.Buffer)
+
+	if n.IsArray() {
+		typeBuf.WriteString("[]")
+	}
+
 	// if Node is an Object, we need to return this object's type. For example,
 	// Node("client.nat") needs to return "ClientNAT" as it's Go type.
 	if n.IsObject() {
-		return n.TypeIdent().Pascal()
+		typeBuf.WriteString(n.TypeIdent().Pascal())
+		return typeBuf.String()
 	}
 
 	// Special cases denoted by the ECS developers.
@@ -122,17 +131,17 @@ func GoType(n *ecsgen.Node) string {
 	// Find the right type!
 	switch n.Definition.Type {
 	case "keyword", "text", "ip", "geo_point":
-		return "*string"
+		return "string"
 	case "long":
-		return "*int64"
+		return "int64"
 	case "integer":
-		return "*int32"
+		return "int32"
 	case "float":
-		return "*float64"
+		return "float64"
 	case "date":
 		return "time.Time"
 	case "boolean":
-		return "*bool"
+		return "bool"
 	case "object":
 		return "map[string]interface{}"
 	default:
@@ -140,7 +149,7 @@ func GoType(n *ecsgen.Node) string {
 	}
 }
 
-// ToGoCode TO
+// ToGoCode attempts to convert an ecsgen.Node into a Golang struct definition.
 func ToGoCode(n *ecsgen.Node) (string, error) {
 	if !n.IsObject() {
 		return "", fmt.Errorf("node %s is not an object", n.Path)
@@ -168,7 +177,7 @@ func ToGoCode(n *ecsgen.Node) (string, error) {
 			fmt.Sprintf(
 				"\t%s %s `json:\"%s,omitempty\" yaml:\"%s,omitempty\" ecs:\"%s\"`",
 				scalarField.FieldIdent().Pascal(),
-				GoType(scalarField),
+				GoFieldType(scalarField),
 				scalarField.Name,
 				scalarField.Name,
 				scalarField.Path,
@@ -180,6 +189,32 @@ func ToGoCode(n *ecsgen.Node) (string, error) {
 	buf.WriteString("\n")
 
 	return buf.String(), nil
+}
+
+/*
+
+TODO: Figure out how to make this work
+
+1. Generate the list of base fields, each one gets their own file
+2. Generate each file concurrently - write the output
+3. Generate the base type - write the output
+
+*/
+
+type codegen struct {
+	fs    *token.FileSet
+	files map[string]*file
+}
+
+type file struct {
+	root    *ecsgen.Node
+	codeAST *ast.File
+	data    *bytes.Buffer
+}
+
+func (b *basic) Generate(n *ecsgen.Node, finchan chan struct{}, errchan chan error) {
+	buf := new(bytes.Buffer)
+	_ = buf
 }
 
 // Execute implements the generator.Generator interface.

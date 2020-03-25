@@ -1,6 +1,7 @@
 package ecsgen
 
 import (
+	"sort"
 	"strings"
 )
 
@@ -121,4 +122,59 @@ func (n *Node) IsObject() bool {
 	}
 
 	return false
+}
+
+// IsArray is used to determine if the given Node within the ECS schema is
+// actually an array of it's noted data type.
+func (n *Node) IsArray() bool {
+	// Not an array if it's implied
+	if n.IsImplied() {
+		return false
+	}
+
+	// not an array if we don't have anything in Normalize
+	if len(n.Definition.Normalize) == 0 {
+		return false
+	}
+
+	// only if normalize definition key has an "array" element,
+	// do we return true
+	for _, elm := range n.Definition.Normalize {
+		if elm == "array" {
+			return true
+		}
+	}
+
+	// No it's not!
+	return false
+}
+
+// ListChildren implements the Walkable interface.
+func (n *Node) ListChildren() <-chan *Node {
+	ret := make(chan *Node, len(n.Children))
+
+	// short circuit if there's no children
+	if len(n.Children) == 0 {
+		close(ret)
+		return ret
+	}
+
+	// get all the child keys
+	keys := []string{}
+	for k := range n.Children {
+		keys = append(keys, k)
+	}
+
+	// sort them alphabetically
+	sort.Strings(keys)
+
+	// add the keys in order to the channel
+	for _, k := range keys {
+		ret <- n.Children[k]
+	}
+
+	close(ret)
+
+	// return the channel
+	return ret
 }
