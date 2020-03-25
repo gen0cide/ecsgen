@@ -51,9 +51,22 @@ func (l *Loader) Load() error {
 		return fmt.Errorf("error creating ecs key whitelist: %v", err)
 	}
 
+	blacklist, err := l.config.Blacklist()
+	if err != nil {
+		return fmt.Errorf("error creating ecs key blacklist: %v", err)
+	}
+
 	// enumerate the parsed map and create the structure
 	for id, def := range data {
-		if !whitelist.Allowed(id) {
+		// if whitelist is empty, all values will pass
+		// if not, only specific values will pass
+		if !whitelist.Empty() && !whitelist.Match(id) {
+			continue
+		}
+
+		// if the blacklist has elements *and* they match
+		// the id, skip to the next field
+		if !blacklist.Empty() && blacklist.Match(id) {
 			continue
 		}
 

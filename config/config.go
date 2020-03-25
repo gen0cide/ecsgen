@@ -34,6 +34,7 @@ type Config struct {
 	SourceFile string
 
 	whitelist  *cli.StringSlice
+	blacklist  *cli.StringSlice
 	generators *cli.StringSlice
 	registry   generator.Registry
 }
@@ -51,6 +52,7 @@ func NewEmptyConfig() (*Config, error) {
 
 	return &Config{
 		whitelist:  cli.NewStringSlice(),
+		blacklist:  cli.NewStringSlice(),
 		generators: cli.NewStringSlice(),
 		registry:   registry,
 	}, nil
@@ -78,6 +80,13 @@ func (c *Config) CLIFlags() []cli.Flag {
 			EnvVars:     []string{"ECSGEN_WHITELIST_VALUE"},
 			Value:       c.whitelist,
 			Destination: c.whitelist,
+		},
+		&cli.StringSliceFlag{
+			Name:        "blacklist",
+			Usage:       "Regular expression that denotes which ECS keys to explicitly forbid into the model. (Can be used multiple times).",
+			EnvVars:     []string{"ECSGEN_BLACKLIST_VALUE"},
+			Value:       c.blacklist,
+			Destination: c.blacklist,
 		},
 		&cli.StringSliceFlag{
 			Name:        "output-plugin",
@@ -118,6 +127,11 @@ func (c *Config) Validate() error {
 	// check to make sure the whitelist is valid
 	if _, err := c.Whitelist(); err != nil {
 		return fmt.Errorf("error parsing whitelist parameter: %v", err)
+	}
+
+	// check to make sure the whitelist is valid
+	if _, err := c.Blacklist(); err != nil {
+		return fmt.Errorf("error parsing blacklist parameter: %v", err)
 	}
 
 	// verify output plugins

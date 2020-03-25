@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/gen0cide/ecsgen"
 	"github.com/gen0cide/ecsgen/generator"
@@ -102,6 +103,85 @@ func (b *basic) Validate() error {
 	return nil
 }
 
+// GoType returns the Go type to be used in the type definition.
+func GoType(n *ecsgen.Node) string {
+	// if Node is an Object, we need to return this object's type. For example,
+	// Node("client.nat") needs to return "ClientNAT" as it's Go type.
+	if n.IsObject() {
+		return n.TypeIdent().Pascal()
+	}
+
+	// Special cases denoted by the ECS developers.
+	switch {
+	case n.Name == "duration" && n.Definition.Type == "long":
+		return "time.Duration"
+	case n.Name == "args" && n.Definition.Type == "keyword":
+		return "[]string"
+	}
+
+	// Find the right type!
+	switch n.Definition.Type {
+	case "keyword", "text", "ip", "geo_point":
+		return "*string"
+	case "long":
+		return "*int64"
+	case "integer":
+		return "*int32"
+	case "float":
+		return "*float64"
+	case "date":
+		return "time.Time"
+	case "boolean":
+		return "*bool"
+	case "object":
+		return "map[string]interface{}"
+	default:
+		panic(fmt.Errorf("no translation for %v (field %s)", n.Definition.Type, n.Name))
+	}
+}
+
+// ToGoCode TO
+func ToGoCode(n *ecsgen.Node) (string, error) {
+	if !n.IsObject() {
+		return "", fmt.Errorf("node %s is not an object", n.Path)
+	}
+
+	scalarKeys := []string{}
+	objectKeys := []string{}
+
+	for key := range n.Children {
+		scalarKeys = append(scalarKeys, key)
+	}
+
+	sort.Strings(scalarKeys)
+	sort.Strings(objectKeys)
+
+	buf := new(strings.Builder)
+
+	buf.WriteString(fmt.Sprintf("// %s defines the object located at ECS path %s.", n.TypeIdent().Pascal(), n.Path))
+	buf.WriteString("\n")
+	buf.WriteString(fmt.Sprintf("type %s struct {", n.TypeIdent().Pascal()))
+	buf.WriteString("\n")
+	for _, k := range scalarKeys {
+		scalarField := n.Children[k]
+		buf.WriteString(
+			fmt.Sprintf(
+				"\t%s %s `json:\"%s,omitempty\" yaml:\"%s,omitempty\" ecs:\"%s\"`",
+				scalarField.FieldIdent().Pascal(),
+				GoType(scalarField),
+				scalarField.Name,
+				scalarField.Name,
+				scalarField.Path,
+			),
+		)
+		buf.WriteString("\n")
+	}
+	buf.WriteString("}")
+	buf.WriteString("\n")
+
+	return buf.String(), nil
+}
+
 // Execute implements the generator.Generator interface.
 // Package: github.com/gen0cide/ecsgen/generator
 func (b *basic) Execute(root *ecsgen.Root) error {
@@ -123,7 +203,7 @@ func (b *basic) Execute(root *ecsgen.Root) error {
 
 	for _, k := range keys {
 		obj := root.Branch(k)
-		code, err := obj.ToGoCode()
+		code, err := ToGoCode(obj)
 		if err != nil {
 			return fmt.Errorf("error generating go code for %s: %v", k, err)
 		}
