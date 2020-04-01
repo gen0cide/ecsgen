@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/gen0cide/ecsgen/generator"
-	"github.com/gen0cide/ecsgen/generator/basic"
 	"github.com/gen0cide/ecsgen/generator/debug"
+	"github.com/gen0cide/ecsgen/generator/gostruct"
 	"github.com/urfave/cli"
 )
 
@@ -25,7 +25,7 @@ var (
 	// list of the builtin generators
 	builtinGenerators = []generator.Generator{
 		debug.New(),
-		basic.New(),
+		gostruct.New(),
 	}
 )
 

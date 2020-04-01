@@ -57,6 +57,7 @@ func generate(c *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("error running %s generator: %v", g.ID(), err)
 		}
+		logger.Infof("Successfully executed %s generator", g.ID())
 	}
 
 	return nil
