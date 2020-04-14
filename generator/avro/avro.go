@@ -250,51 +250,66 @@ type Field struct {
 	Parent string //we need to keep track of the name of the parent of the nested types
 	NestedTypes          []*Field `json:"fields,omitempty"`
 	Type string `json:"type"`
-	Doc string `json:"doc"`
+	Defined bool //defaults to false
+	//Doc string `json:"doc"`
 	//Default        []string `json:"default"` // this might not be needed..
 }
 
 func (f *Field) MarshalJSON() ([]byte, error) {
 	ret := make(map[string]interface{})
 	ret["name"] = f.Name
-	ret["doc"] = f.Doc
+	//ret["doc"] = f.Doc
 	var typeArray []interface{}
 	typeArray = append(typeArray, "null")
-	switch f.Type {
-	case "record":
-		fieldType := map[string]interface{}{
-			"fields": f.NestedTypes,
-			"type": "record",
-			"name": f.Name,
+
+	if f.Defined {
+		ret["type"] = append(typeArray, f.Name)
+	} else {
+		switch f.Type {
+		case "record":
+			fieldType := map[string]interface{}{
+				"fields": f.NestedTypes,
+				"type":   "record",
+				"name":   f.Name,
+			}
+			ret["type"] = append(typeArray, fieldType)
+		default:
+			//ret["type"] = "string"
+			ret["type"] = f.Type
 		}
-		ret["type"] = append(typeArray, fieldType)
-	default:
-		//ret["type"] = "string"
-		ret["type"] = f.Type
 	}
 	return json.Marshal(ret)
 }
 
-func customPostOrder(root *ecsgen.Node, parent string) (*Field){
+func customPostOrder(root *ecsgen.Node, parent string, fieldsDefined map[string]bool) (*Field){
 	field := Field{
 		Name: root.Name,
 	}
 
 	if root.Definition != nil{
-		field.Doc = root.Definition.Description
+		//field.Doc = root.Definition.Description
 
 		//field.Type = root.Definition.Type
 		field.Type = GoFieldType(root)
 	} else {
-		field.Parent = parent
-		field.Type = "record"
-		fields := []*Field{}
-		for _, v := range root.Children {
-		nestedField := customPostOrder(v, root.Name)
-		fields = append(fields, nestedField)
+		//check to see if we have defined this record previously
+		exists := fieldsDefined[root.Name]
+		fmt.Println(exists)
+		if exists {
+			field.Defined = true
+		}else {
+			field.Parent = parent
+			field.Type = "record"
+			fields := []*Field{}
+			for _, v := range root.Children {
+				nestedField := customPostOrder(v, root.Name, fieldsDefined)
+				fields = append(fields, nestedField)
 
+			}
+			field.NestedTypes = fields
+			fieldsDefined[root.Name] = true
+			//fmt.Println(fieldsDefined[root.Name])
 		}
-		field.NestedTypes = fields
 	}
 	return &field
 }
@@ -316,9 +331,10 @@ func (a *avro) Execute(root *ecsgen.Root) error {
 	//fmt.Println(schema)
 
 	fields := []*Field{}
+	fieldsDefined := make(map[string]bool)
 	for _, node := range root.TopLevel{
 		if node.IsObject() {
-			nestedField := customPostOrder(node, "")
+			nestedField := customPostOrder(node, "", fieldsDefined)
 			fields = append(fields, nestedField)
 		}
 	}
