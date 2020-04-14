@@ -6,9 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gen0cide/ecsgen/generator"
-	"github.com/gen0cide/ecsgen/generator/basic"
-	"github.com/gen0cide/ecsgen/generator/debug"
+	"ecsgen/generator"
+	"ecsgen/generator/avro"
+	"ecsgen/generator/basic"
+	"ecsgen/generator/debug"
 	"github.com/urfave/cli"
 )
 
@@ -26,6 +27,7 @@ var (
 	builtinGenerators = []generator.Generator{
 		debug.New(),
 		basic.New(),
+		avro.New(),
 	}
 )
 

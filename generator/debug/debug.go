@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gen0cide/ecsgen"
-	"github.com/gen0cide/ecsgen/generator"
+	"ecsgen"
+	"ecsgen/generator"
 	"github.com/urfave/cli"
 )
 

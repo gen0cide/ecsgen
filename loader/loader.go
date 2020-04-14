@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
+	"ecsgen"
+	"ecsgen/config"
 	"github.com/elastic/go-ucfg/yaml"
-	"github.com/gen0cide/ecsgen"
-	"github.com/gen0cide/ecsgen/config"
 )
 
 // Loader is used to load the ECS schema definitions into a valid data structure.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gen0cide/ecsgen"
+	"ecsgen"
 	"github.com/urfave/cli"
 )
 
@@ -77,6 +77,7 @@ func shimCLIFlags(g Generator) []cli.Flag {
 		}
 		newFlags = append(newFlags, newFlag)
 	}
+	fmt.Println(newFlags)
 
 	return newFlags
 }

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/gen0cide/ecsgen"
+	"ecsgen"
 	"github.com/gen0cide/genolog"
 	"github.com/gen0cide/genolog/pretty"
 	"github.com/sirupsen/logrus"

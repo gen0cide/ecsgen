@@ -1,10 +1,9 @@
 package main
 
 import (
+	"ecsgen/config"
+	"ecsgen/loader"
 	"fmt"
-
-	"github.com/gen0cide/ecsgen/config"
-	"github.com/gen0cide/ecsgen/loader"
 	"github.com/urfave/cli"
 )
 
