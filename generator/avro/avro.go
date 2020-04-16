@@ -282,6 +282,9 @@ func (f *Field) MarshalJSON() ([]byte, error) {
 }
 
 func customPostOrder(root *ecsgen.Node, parent string, fieldsDefined map[string]bool) (*Field){
+	if root.Name == "interface" {
+		root.Name = "not_interface"
+	}
 	field := Field{
 		Name: root.Name,
 	}
