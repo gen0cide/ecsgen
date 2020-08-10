@@ -38,6 +38,7 @@ Gostruct is used to generate Go code for an ECS object. It has a few options:
 --opt-gostruct-output-dir value       Path to the directory where the generated code should be written. [$ECSGEN_OPT_GOSTRUCT_OUTPUT_DIR]
 --opt-gostruct-output-filename value  Destination filename for the generated code. (default: generated_ecs.go) [$ECSGEN_OPT_GOSTRUCT_OUTPUT_FILENAME]
 --opt-gostruct-marshal-json           Include a json.Marshaler implementation that removes empty fields. (default: false) [$ECSGEN_OPT_GOSTRUCT_MARSHAL_JSON]
+--opt-gostruct-remove-at              Remove @ character from @timestamp field. (default: false) [$ECSGEN_OPT_GOSTRUCT_REMOVE_AT]
 ```
 
 The `--opt-gostruct-marshal-json` is shown in the examples/go/with-json-marshaling example directory.

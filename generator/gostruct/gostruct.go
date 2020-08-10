@@ -35,6 +35,7 @@ type basic struct {
 	OutputDir          string
 	Filename           string
 	IncludeJSONMarshal bool
+	RemoveAtCharacter  bool
 }
 
 // New is a constructor for an empty debug output plugin.
@@ -75,6 +76,12 @@ func (b *basic) CLIFlags() []cli.Flag {
 			Usage:       "Include a json.Marshaler implementation that removes empty fields.",
 			EnvVars:     []string{"MARSHAL_JSON"},
 			Destination: &b.IncludeJSONMarshal,
+		},
+		&cli.BoolFlag{
+			Name:        "remove-at",
+			Usage:       "Remove @ character from the ECS field @timestamp",
+			EnvVars:     []string{"REMOVE_AT"},
+			Destination: &b.RemoveAtCharacter,
 		},
 	}
 }
@@ -139,9 +146,6 @@ func GoFieldType(n *ecsgen.Node) string {
 	switch {
 	case n.Name == "duration" && n.Definition.Type == "long":
 		typeBuf.WriteString("time.Duration")
-		return typeBuf.String()
-	case n.Name == "args" && n.Definition.Type == "keyword":
-		typeBuf.WriteString("[]string")
 		return typeBuf.String()
 	case n.Path == "labels":
 		typeBuf.WriteString("map[string]interface{}")
@@ -250,11 +254,13 @@ func (b *basic) ToGoCode(n *ecsgen.Node) (string, error) {
 		// enumerate the fields for the object fields
 		for _, fieldName := range fieldKeys {
 			field := n.Children[fieldName]
-			buf.WriteString(
-				fmt.Sprintf(
-					"\tif val := reflect.ValueOf(b.%s); !val.IsZero() {", field.FieldIdent().Pascal(),
-				),
-			)
+			if GoFieldType(field) != "bool" {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\tif val := reflect.ValueOf(b.%s); !val.IsZero() {", field.FieldIdent().Pascal(),
+					),
+				)
+			}
 			buf.WriteString(
 				fmt.Sprintf(
 					"\t\tres[\"%s\"] = b.%s",
@@ -262,7 +268,9 @@ func (b *basic) ToGoCode(n *ecsgen.Node) (string, error) {
 					field.FieldIdent().Pascal(),
 				),
 			)
-			buf.WriteString("\t}")
+			if GoFieldType(field) != "bool" {
+				buf.WriteString("\t}")
+			}
 			buf.WriteString("\n")
 			buf.WriteString("\n")
 		}
@@ -311,6 +319,11 @@ func (b *basic) CreateBase(r *ecsgen.Root) (string, error) {
 	// and add them to the type definition
 	for _, k := range scalarFields {
 		field := r.TopLevel[k]
+		// If user included remove at flag, trim the @ character
+		// from the timestamp field
+		if b.RemoveAtCharacter && k == "@timestamp" {
+			k = "timestamp"
+		}
 		buf.WriteString(
 			fmt.Sprintf(
 				"\t%s %s `json:\"%s,omitempty\" yaml:\"%s,omitempty\" ecs:\"%s\"`",
@@ -370,11 +383,18 @@ func (b *basic) CreateBase(r *ecsgen.Root) (string, error) {
 		// first we enumerate the scalar fields
 		for _, fieldName := range scalarFields {
 			field := r.TopLevel[fieldName]
-			buf.WriteString(
-				fmt.Sprintf(
-					"\tif val := reflect.ValueOf(b.%s); !val.IsZero() {", field.FieldIdent().Pascal(),
-				),
-			)
+			// If user included remove at flag, trim the @ character
+			// from the timestamp field
+			if b.RemoveAtCharacter && fieldName == "@timestamp" {
+				fieldName = "timestamp"
+			}
+			if GoFieldType(field) != "bool" {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\tif val := reflect.ValueOf(b.%s); !val.IsZero() {", field.FieldIdent().Pascal(),
+					),
+				)
+			}
 			buf.WriteString(
 				fmt.Sprintf(
 					"\t\tres[\"%s\"] = b.%s",
@@ -382,7 +402,9 @@ func (b *basic) CreateBase(r *ecsgen.Root) (string, error) {
 					field.FieldIdent().Pascal(),
 				),
 			)
-			buf.WriteString("\t}")
+			if GoFieldType(field) != "bool" {
+				buf.WriteString("\t}")
+			}
 			buf.WriteString("\n")
 			buf.WriteString("\n")
 		}
