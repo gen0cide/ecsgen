@@ -175,6 +175,9 @@ func GoFieldType(n *ecsgen.Node) string {
 	case "object":
 		typeBuf.WriteString("map[string]interface{}")
 		return typeBuf.String()
+	case "flattened":
+		typeBuf.WriteString("map[string]string")
+		return typeBuf.String()
 	default:
 		panic(fmt.Errorf("no translation for %v (field %s)", n.Definition.Type, n.Name))
 	}
