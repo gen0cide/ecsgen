@@ -5,7 +5,7 @@ import (
 
 	"github.com/gen0cide/ecsgen/config"
 	"github.com/gen0cide/ecsgen/loader"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 func init() {

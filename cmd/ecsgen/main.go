@@ -7,7 +7,7 @@ import (
 	"github.com/gen0cide/genolog"
 	"github.com/gen0cide/genolog/pretty"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 var (

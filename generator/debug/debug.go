@@ -6,7 +6,7 @@ import (
 
 	"github.com/gen0cide/ecsgen"
 	"github.com/gen0cide/ecsgen/generator"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 type debug struct {

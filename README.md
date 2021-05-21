@@ -8,6 +8,10 @@ This project aims to create a well defined way to perform code generation on [El
 go install github.com/gen0cide/ecsgen/cmd/ecsgen
 ```
 
+## Building
+- Navigate to the directory `./cmd/ecsgen`
+- Run `go build`
+
 ## Usage
 
 To use `ecsgen`, there are a few options:
