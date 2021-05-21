@@ -9,7 +9,7 @@ import (
 	"github.com/gen0cide/ecsgen/generator"
 	"github.com/gen0cide/ecsgen/generator/debug"
 	"github.com/gen0cide/ecsgen/generator/gostruct"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 var (

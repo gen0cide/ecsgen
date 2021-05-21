@@ -3,8 +3,8 @@ package ecsgen
 import (
 	"strings"
 
-	"github.com/gen0cide/flect"
 	"github.com/go-openapi/swag"
+	"github.com/gobuffalo/flect"
 )
 
 // Initialisms is a type alias for a slice of strings that is used to create capitalization

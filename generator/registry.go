@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 // Registry is a type that is used to hold all the output generators. This is similar
