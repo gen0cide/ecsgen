@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/gen0cide/ecsgen"
-	"github.com/urfave/cli"
+	cli "github.com/urfave/cli/v2"
 )
 
 // The Generator interface is used to define a way to create multiple output

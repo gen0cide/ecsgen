@@ -16,7 +16,7 @@ import (
 
 	"github.com/gen0cide/ecsgen"
 	"github.com/gen0cide/ecsgen/generator"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 	"golang.org/x/tools/imports"
 )
 
@@ -154,7 +154,7 @@ func GoFieldType(n *ecsgen.Node) string {
 
 	// Find the right type!
 	switch n.Definition.Type {
-	case "keyword", "text", "ip", "geo_point":
+	case "keyword", "text", "ip", "geo_point", "constant_keyword":
 		typeBuf.WriteString("string")
 		return typeBuf.String()
 	case "long":
@@ -163,7 +163,7 @@ func GoFieldType(n *ecsgen.Node) string {
 	case "integer":
 		typeBuf.WriteString("int32")
 		return typeBuf.String()
-	case "float":
+	case "float", "scaled_float":
 		typeBuf.WriteString("float64")
 		return typeBuf.String()
 	case "date":
@@ -172,7 +172,7 @@ func GoFieldType(n *ecsgen.Node) string {
 	case "boolean":
 		typeBuf.WriteString("bool")
 		return typeBuf.String()
-	case "object":
+	case "object", "nested":
 		typeBuf.WriteString("map[string]interface{}")
 		return typeBuf.String()
 	case "flattened":
