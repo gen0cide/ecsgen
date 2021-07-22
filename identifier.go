@@ -3,7 +3,7 @@ package ecsgen
 import (
 	"strings"
 
-	"github.com/gen0cide/flect"
+	"github.com/gobuffalo/flect"
 	"github.com/go-openapi/swag"
 )
 
