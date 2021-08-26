@@ -154,7 +154,7 @@ func GoFieldType(n *ecsgen.Node) string {
 
 	// Find the right type!
 	switch n.Definition.Type {
-	case "keyword", "text", "ip", "geo_point", "constant_keyword":
+	case "keyword", "text", "ip", "geo_point", "constant_keyword", "match_only_text", "wildcard":
 		typeBuf.WriteString("string")
 		return typeBuf.String()
 	case "long":
