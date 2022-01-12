@@ -28,6 +28,7 @@ var DefaultInitialisms = Initialisms{
 	"DLL",
 	"OS",
 	"DNS",
+	"FTP",
 	"HTTP",
 	"PE",
 	"JA3",
