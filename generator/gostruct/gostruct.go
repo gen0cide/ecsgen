@@ -35,7 +35,7 @@ type basic struct {
 	OutputDir          string
 	Filename           string
 	IncludeJSONMarshal bool
-	RemoveAtCharacter  bool
+	WeakUnmarshal      bool
 }
 
 // New is a constructor for an empty debug output plugin.
@@ -78,10 +78,10 @@ func (b *basic) CLIFlags() []cli.Flag {
 			Destination: &b.IncludeJSONMarshal,
 		},
 		&cli.BoolFlag{
-			Name:        "remove-at",
-			Usage:       "Remove @ character from the ECS field @timestamp",
-			EnvVars:     []string{"REMOVE_AT"},
-			Destination: &b.RemoveAtCharacter,
+			Name:        "weak-unmarshal",
+			Usage:       "If set, when unmarshalling objects it will convert scalar types to arrays, non numeric types to numeric and vice versa.",
+			EnvVars:     []string{"WEAK_UNMARSHAL"},
+			Destination: &b.WeakUnmarshal,
 		},
 	}
 }
@@ -286,6 +286,111 @@ func (b *basic) ToGoCode(n *ecsgen.Node) (string, error) {
 		buf.WriteString("\n")
 	}
 
+	if b.WeakUnmarshal {
+		// We override the UnmarshalJSON method to be able to attempt to unmarshal scalar fields that should be
+		// an array and to convert strings that should be put into numeric fields
+		buf.WriteString("\n")
+		buf.WriteString("// UnmarshalJSON implements the json.Unmarshaler interface and attempts weak decoding of fields")
+		buf.WriteString("\n")
+		buf.WriteString(
+			fmt.Sprintf(
+				"func (b *%s) UnmarshalJSON(data []byte) error {",
+				n.TypeIdent().Pascal(),
+			),
+		)
+		buf.WriteString("\n")
+
+		for i, fieldName := range fieldKeys {
+			field := n.Children[fieldName]
+			if i == 0 {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\tresult := gjson.GetBytes(data, \"%s\")\n", field.Name,
+					),
+				)
+			} else {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\tresult = gjson.GetBytes(data, \"%s\")\n", field.Name,
+					),
+				)
+			}
+			buf.WriteString("\tif result.Index > 0 {\n")
+			if GoFieldType(field) == "[]string" || GoFieldType(field) == "int32" || GoFieldType(field) == "int64" {
+				if GoFieldType(field) == "[]string" {
+					buf.WriteString(
+						fmt.Sprintf(
+							"\t\tval_%s, err := decodeArray(\"%s\", result.Value())\n", field.Name, field.Path,
+						),
+					)
+				} else if GoFieldType(field) == "int32" {
+					buf.WriteString(
+						fmt.Sprintf(
+							"\t\tval_%s, err := decodeInt32(\"%s\", result.Value())\n", field.Name, field.Path,
+						),
+					)
+				} else if GoFieldType(field) == "int64" {
+					buf.WriteString(
+						fmt.Sprintf(
+							"\t\tval_%s, err := decodeInt64(\"%s\", result.Value())\n", field.Name, field.Path,
+						),
+					)
+				}
+				buf.WriteString("\t\tif err != nil {\n")
+				buf.WriteString("\t\t\treturn err\n")
+				buf.WriteString("\t\t}\n")
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = val_%s\n", field.FieldIdent().Pascal(), field.Name,
+					),
+				)
+			} else if GoFieldType(field) == "string" {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = result.String()\n", field.FieldIdent().Pascal(),
+					),
+				)
+			} else if GoFieldType(field) == "time.Time" {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = result.Time()\n", field.FieldIdent().Pascal(),
+					),
+				)
+			} else if GoFieldType(field) == "float64" {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = result.Float()\n", field.FieldIdent().Pascal(),
+					),
+				)
+			} else if GoFieldType(field) == "bool" {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = result.Bool()\n", field.FieldIdent().Pascal(),
+					),
+				)
+			} else {
+				buf.WriteString("\t\tvar raw []byte\n")
+				buf.WriteString("\t\traw = data[result.Index:result.Index+len(result.Raw)]\n")
+				buf.WriteString(fmt.Sprintf("\t\tvar aux %s\n", GoFieldType(field)))
+				buf.WriteString("\t\terr := json.Unmarshal(raw, &aux)\n")
+				buf.WriteString("\t\tif err != nil {\n")
+				buf.WriteString("\t\t\treturn err\n")
+				buf.WriteString("\t\t}\n")
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = aux\n", field.FieldIdent().Pascal(),
+					),
+				)
+			}
+			buf.WriteString("\t}\n")
+			buf.WriteString("\n")
+		}
+
+		buf.WriteString("\treturn nil\n")
+		buf.WriteString("}")
+		buf.WriteString("\n")
+	}
+
 	return buf.String(), nil
 }
 
@@ -322,11 +427,6 @@ func (b *basic) CreateBase(r *ecsgen.Root) (string, error) {
 	// and add them to the type definition
 	for _, k := range scalarFields {
 		field := r.TopLevel[k]
-		// If user included remove at flag, trim the @ character
-		// from the timestamp field
-		if b.RemoveAtCharacter && k == "@timestamp" {
-			k = "timestamp"
-		}
 		buf.WriteString(
 			fmt.Sprintf(
 				"\t%s %s `json:\"%s,omitempty\" yaml:\"%s,omitempty\" ecs:\"%s\"`",
@@ -386,11 +486,6 @@ func (b *basic) CreateBase(r *ecsgen.Root) (string, error) {
 		// first we enumerate the scalar fields
 		for _, fieldName := range scalarFields {
 			field := r.TopLevel[fieldName]
-			// If user included remove at flag, trim the @ character
-			// from the timestamp field
-			if b.RemoveAtCharacter && fieldName == "@timestamp" {
-				fieldName = "timestamp"
-			}
 			if GoFieldType(field) != "bool" {
 				buf.WriteString(
 					fmt.Sprintf(
@@ -440,6 +535,227 @@ func (b *basic) CreateBase(r *ecsgen.Root) (string, error) {
 		buf.WriteString("\n")
 	}
 
+	if b.WeakUnmarshal {
+		// We override the UnmarshalJSON method to be able to attempt to unmarshal scalar fields that should be
+		// an array and to convert strings that should be put into numeric fields
+		buf.WriteString("\n")
+		buf.WriteString("// UnmarshalJSON implements the json.Unmarshaler interface and attempts weak decoding of fields")
+		buf.WriteString("\n")
+		buf.WriteString("func (b *Base) UnmarshalJSON(data []byte) error {")
+		buf.WriteString("\n")
+
+		for i, fieldName := range scalarFields {
+			field := r.TopLevel[fieldName]
+			if i == 0 {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\tresult := gjson.GetBytes(data, \"%s\")\n", field.Name,
+					),
+				)
+			} else {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\tresult = gjson.GetBytes(data, \"%s\")\n", field.Name,
+					),
+				)
+			}
+			buf.WriteString("\tif result.Index > 0 {\n")
+			if GoFieldType(field) == "[]string" || GoFieldType(field) == "int32" || GoFieldType(field) == "int64" {
+				if GoFieldType(field) == "[]string" {
+					buf.WriteString(
+						fmt.Sprintf(
+							"\t\tval_%s, err := decodeArray(\"%s\", result.Value())\n", field.Name, field.Path,
+						),
+					)
+				} else if GoFieldType(field) == "int32" {
+					buf.WriteString(
+						fmt.Sprintf(
+							"\t\tval_%s, err := decodeInt32(\"%s\", result.Value())\n", field.Name, field.Path,
+						),
+					)
+				} else if GoFieldType(field) == "int64" {
+					buf.WriteString(
+						fmt.Sprintf(
+							"\t\tval_%s, err := decodeInt64(\"%s\", result.Value())\n", field.Name, field.Path,
+						),
+					)
+				}
+				buf.WriteString("\t\tif err != nil {\n")
+				buf.WriteString("\t\t\treturn err\n")
+				buf.WriteString("\t\t}\n")
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = val_%s\n", field.FieldIdent().Pascal(), field.Name,
+					),
+				)
+			} else if GoFieldType(field) == "string" {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = result.String()\n", field.FieldIdent().Pascal(),
+					),
+				)
+			} else if GoFieldType(field) == "time.Time" {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = result.Time()\n", field.FieldIdent().Pascal(),
+					),
+				)
+			} else if GoFieldType(field) == "float64" {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = result.Float()\n", field.FieldIdent().Pascal(),
+					),
+				)
+			} else if GoFieldType(field) == "bool" {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = result.Bool()\n", field.FieldIdent().Pascal(),
+					),
+				)
+			} else {
+				buf.WriteString("\t\tvar raw []byte\n")
+				buf.WriteString("\t\traw = data[result.Index:result.Index+len(result.Raw)]\n")
+				buf.WriteString(fmt.Sprintf("\t\tvar aux %s\n", GoFieldType(field)))
+				buf.WriteString("\t\terr := json.Unmarshal(raw, &aux)\n")
+				buf.WriteString("\t\tif err != nil {\n")
+				buf.WriteString("\t\t\treturn err\n")
+				buf.WriteString("\t\t}\n")
+				buf.WriteString(
+					fmt.Sprintf(
+						"\t\tb.%s = aux\n", field.FieldIdent().Pascal(),
+					),
+				)
+			}
+			buf.WriteString("\t}\n")
+			buf.WriteString("\n")
+		}
+
+		// now we enumerate the object fields
+		for i, fieldName := range objectFields {
+			field := r.TopLevel[fieldName]
+			if i == 0 {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\tresult_obj := gjson.GetBytes(data, \"%s\")\n", field.Name,
+					),
+				)
+			} else {
+				buf.WriteString(
+					fmt.Sprintf(
+						"\tresult_obj = gjson.GetBytes(data, \"%s\")\n", field.Name,
+					),
+				)
+			}
+			buf.WriteString("\tif result_obj.Index > 0 {\n")
+			buf.WriteString("\t\tvar raw []byte\n")
+			buf.WriteString("\t\traw = data[result_obj.Index:result_obj.Index+len(result_obj.Raw)]\n")
+			buf.WriteString(fmt.Sprintf("\t\tvar aux %s\n", GoFieldType(field)))
+			buf.WriteString("\t\terr := json.Unmarshal(raw, &aux)\n")
+			buf.WriteString("\t\tif err != nil {\n")
+			buf.WriteString("\t\t\treturn err\n")
+			buf.WriteString("\t\t}\n")
+			buf.WriteString(
+				fmt.Sprintf(
+					"\t\tb.%s = aux\n", field.FieldIdent().Pascal(),
+				),
+			)
+			buf.WriteString("\t}\n")
+		}
+
+		buf.WriteString("\treturn nil\n")
+		buf.WriteString("}")
+		buf.WriteString("\n")
+
+		// Create utility functions once used by weak unmarshal methods
+		buf.WriteString("func decodeInt64(varName string, v interface{}) (int64, error) {")
+		buf.WriteString("\n")
+		buf.WriteString("\tdataVal := reflect.Indirect(reflect.ValueOf(v))\n")
+		buf.WriteString("\tdataValKind := dataVal.Kind()\n")
+		buf.WriteString("\tswitch dataValKind {\n")
+		buf.WriteString("\tcase reflect.String:\n")
+		buf.WriteString("\t\tif v == \"\" {\n")
+		buf.WriteString("\t\t\treturn int64(0), nil\n")
+		buf.WriteString("\t\t}\n")
+		buf.WriteString("\t\tval, err := strconv.ParseInt(dataVal.String(), 10, 64)\n")
+		buf.WriteString("\t\tif err != nil {\n")
+		buf.WriteString("\t\t\treturn int64(0), fmt.Errorf(\"cannot parse var %s as int64\", varName)\n")
+		buf.WriteString("\t\t}\n")
+		buf.WriteString("\t\treturn int64(val), nil\n")
+		buf.WriteString("\tcase reflect.Int, reflect.Int32, reflect.Int64:\n")
+		buf.WriteString("\t\treturn int64(dataVal.Int()), nil\n")
+		buf.WriteString("\tcase reflect.Float32, reflect.Float64:\n")
+		buf.WriteString("\t\treturn int64(dataVal.Float()), nil\n")
+		buf.WriteString("\t}\n")
+		buf.WriteString("\tres, isOk := v.(int64)\n")
+		buf.WriteString("\tif !isOk {\n")
+		buf.WriteString("\t\treturn int64(0), fmt.Errorf(\"var %s is not of type int64\", varName)\n")
+		buf.WriteString("\t}\n")
+		buf.WriteString("\treturn res, nil\n")
+		buf.WriteString("}")
+		buf.WriteString("\n")
+
+		buf.WriteString("func decodeInt32(varName string, v interface{}) (int32, error) {")
+		buf.WriteString("\n")
+		buf.WriteString("\tdataVal := reflect.Indirect(reflect.ValueOf(v))\n")
+		buf.WriteString("\tdataValKind := dataVal.Kind()\n")
+		buf.WriteString("\tswitch dataValKind {\n")
+		buf.WriteString("\tcase reflect.String:\n")
+		buf.WriteString("\t\tif v == \"\" {\n")
+		buf.WriteString("\t\t\treturn int32(0), nil\n")
+		buf.WriteString("\t\t}\n")
+		buf.WriteString("\t\tval, err := strconv.ParseInt(dataVal.String(), 10, 32)\n")
+		buf.WriteString("\t\tif err != nil {\n")
+		buf.WriteString("\t\t\treturn int32(0), fmt.Errorf(\"cannot parse var %s as int32\", varName)\n")
+		buf.WriteString("\t\t}\n")
+		buf.WriteString("\t\treturn int32(val), nil\n")
+		buf.WriteString("\tcase reflect.Int, reflect.Int32, reflect.Int64:\n")
+		buf.WriteString("\t\treturn int32(dataVal.Int()), nil\n")
+		buf.WriteString("\tcase reflect.Float32, reflect.Float64:\n")
+		buf.WriteString("\t\treturn int32(dataVal.Float()), nil\n")
+		buf.WriteString("\t}\n")
+		buf.WriteString("\tres, isOk := v.(int32)\n")
+		buf.WriteString("\tif !isOk {\n")
+		buf.WriteString("\t\treturn int32(0), fmt.Errorf(\"var %s is not of type int32\", varName)\n")
+		buf.WriteString("\t}\n")
+		buf.WriteString("\treturn res, nil\n")
+		buf.WriteString("}")
+		buf.WriteString("\n")
+
+		// Only arrays of strings exist in ECS
+		buf.WriteString("func decodeArray(varName string, v interface{}) ([]string, error) {")
+		buf.WriteString("\n")
+		buf.WriteString("\tdataVal := reflect.Indirect(reflect.ValueOf(v))\n")
+		buf.WriteString("\tdataValKind := dataVal.Kind()\n")
+		buf.WriteString("\tswitch dataValKind {\n")
+		buf.WriteString("\tcase reflect.String:\n")
+		buf.WriteString("\t\treturn strings.Split(dataVal.String(), \",\"), nil\n")
+		buf.WriteString("\tcase reflect.Int, reflect.Int64:\n")
+		buf.WriteString("\t\tval := strconv.FormatInt(dataVal.Int(), 10)\n")
+		buf.WriteString("\t\treturn []string{val}, nil\n")
+		buf.WriteString("\tcase reflect.Uint, reflect.Uint64:\n")
+		buf.WriteString("\t\tval := strconv.FormatUint(dataVal.Uint(), 10)\n")
+		buf.WriteString("\t\treturn []string{val}, nil\n")
+		buf.WriteString("\tcase reflect.Float32, reflect.Float64:\n")
+		buf.WriteString("\t\tval := strconv.FormatFloat(dataVal.Float(), 'f', -1, 64)\n")
+		buf.WriteString("\t\treturn []string{val}, nil\n")
+		buf.WriteString("\tcase reflect.Array, reflect.Slice:\n")
+		buf.WriteString("\t\tval := reflect.ValueOf(v)\n")
+		buf.WriteString("\t\tsliceLen := val.Len()\n")
+		buf.WriteString("\t\tresult := make([]string, 0, sliceLen)\n")
+		buf.WriteString("\t\tfor i := 0; i < sliceLen; i++ {\n")
+		buf.WriteString("\t\t\tresult = append(result, val.Index(i).Elem().String())\n")
+		buf.WriteString("\t\t}\n")
+		buf.WriteString("\t\treturn result, nil\n")
+		buf.WriteString("\t}\n")
+		buf.WriteString("\tres, isOk := v.([]string)\n")
+		buf.WriteString("\tif !isOk {\n")
+		buf.WriteString("\t\treturn nil, fmt.Errorf(\"var %s is not of type string array\", varName)\n")
+		buf.WriteString("\t}\n")
+		buf.WriteString("\treturn res, nil\n")
+		buf.WriteString("}")
+		buf.WriteString("\n")
+	}
+
 	return buf.String(), nil
 }
 
@@ -466,6 +782,11 @@ func (b *basic) Execute(root *ecsgen.Root) error {
 	// Add the generated comment and the package definition
 	buf.WriteString("// Code generated by ecsgen; DO NOT EDIT.\n")
 	buf.WriteString(fmt.Sprintf("package %s\n\n", b.PackageName))
+
+	if b.WeakUnmarshal {
+		// Add the gjson import since this is not handled by imports.Process, not sure why
+		buf.WriteString("import \"github.com/tidwall/gjson\"\n")
+	}
 
 	// Add the top level Base type definition at the top of the file
 	baseDef, err := b.CreateBase(root)
@@ -505,7 +826,7 @@ func (b *basic) Execute(root *ecsgen.Root) error {
 		return fmt.Errorf("error formatting generated go code: %v", err)
 	}
 
-	// Now we will handle the imports
+	// // Now we will handle the imports
 	imported, err := imports.Process(b.Filename, dstBuf.Bytes(), nil)
 	if err != nil {
 		return fmt.Errorf("error adding imports to generated go code: %v", err)
